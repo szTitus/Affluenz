@@ -1,16 +1,23 @@
 """
 Disponibilités hébergements – heuristique basée sur :
+  - Nombre réel de logements référencés (DATAtourisme, refresh 24h)
   - Saison
   - Week-end
   - Vacances scolaires françaises Zone B (Académie d'Aix-Marseille)
 
-Source vacances : data.education.gouv.fr (open data, sans clé API).
+Sources : data.education.gouv.fr + api.datatourisme.fr
 """
 
 from datetime import date
 from functools import lru_cache
 
 import httpx
+
+from app.services.datatourisme import fetch_accommodation_count
+from app.core.config import settings
+
+# Référence locale : seuil "beaucoup de logements" pour calibrer le score
+_CAPACITY_REFERENCE = 200  # si > 200 logements → marché touristique dense
 
 HOLIDAYS_URL = (
     "https://data.education.gouv.fr/api/explore/v2.1/catalog/datasets"
@@ -55,6 +62,15 @@ def _is_school_holiday(target: date) -> bool:
 def compute_availability_score(target: date) -> float:
     """Score d'occupation estimé (0-100)."""
     score = 30.0
+
+    # Calibrage via DATAtourisme : plus il y a de logements référencés,
+    # plus le marché est touristique → base plus haute en saison
+    if settings.datatourisme_key:
+        count = fetch_accommodation_count(settings.datatourisme_key)
+        if count >= _CAPACITY_REFERENCE:
+            score += 5  # marché dense, base légèrement plus haute
+        elif count > 0 and count < 50:
+            score -= 5  # peu d'offre référencée → village moins touristique
 
     # Saison – Saintes-Maries est très saisonnière
     if target.month in (7, 8):

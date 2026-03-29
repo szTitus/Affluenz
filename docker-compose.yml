@@ -23,6 +23,7 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-affluence}:${POSTGRES_PASSWORD:-affluence_secret}@db:5432/${POSTGRES_DB:-affluence}
       OPENAGENDA_KEY: ${OPENAGENDA_KEY:-}
+      DATATOURISME_KEY: ${DATATOURISME_KEY:-}
     depends_on:
       db:
         condition: service_healthy
