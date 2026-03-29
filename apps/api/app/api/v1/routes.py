@@ -51,9 +51,31 @@ def get_forecast(db: Session = Depends(get_db)):
 
 @router.get("/debug/events-raw")
 def debug_events_raw():
-    """Retourne les événements bruts OpenAgenda pour vérifier l'intégration."""
-    events = fetch_events(settings.openagenda_key, days=7)
-    return {"count": len(events), "events": events[:5]}
+    """Diagnostic complet : teste fetch_events et retourne le résultat."""
+    import httpx
+    key = settings.datatourisme_key
+    # Appel direct sans cache
+    try:
+        with httpx.Client(timeout=15) as client:
+            resp = client.get(
+                "https://api.datatourisme.fr/v1/catalog",
+                params={
+                    "api_key": key,
+                    "geo_distance": "43.4527,4.4282,30km",
+                    "filters": 'type=="EntertainmentAndEvent" OR type=="Festival" OR type=="SocialEvent"',
+                    "page_size": 1,
+                },
+            )
+        data = resp.json()
+        total = data.get("meta", {}).get("total", "N/A")
+        return {
+            "key_preview": key[:8] + "..." if key else "EMPTY",
+            "status": resp.status_code,
+            "total_events": total,
+            "fetch_events_result_len": len(fetch_events(key, days=7)),
+        }
+    except Exception as exc:
+        return {"error": str(exc), "key_preview": key[:8] + "..." if key else "EMPTY"}
 
 
 @router.get("/debug/events-nofilter")
