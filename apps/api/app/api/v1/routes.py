@@ -3,9 +3,11 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.db.session import get_db
 from app.models.affluence import AffluenceScore, Event
 from app.schemas.affluence import AffluenceOut, EventIn, EventOut
+from app.services.events_fetcher import fetch_events
 from app.services.scoring import refresh_scores
 
 router = APIRouter()
@@ -45,6 +47,13 @@ def get_forecast(db: Session = Depends(get_db)):
         .all()
     )
     return rows
+
+
+@router.get("/debug/events-raw")
+def debug_events_raw():
+    """Retourne les événements bruts OpenAgenda pour vérifier l'intégration."""
+    events = fetch_events(settings.openagenda_key, days=7)
+    return {"count": len(events), "events": events[:5]}
 
 
 @router.get("/events", response_model=list[EventOut])

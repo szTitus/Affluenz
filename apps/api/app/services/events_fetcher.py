@@ -1,21 +1,18 @@
 """
 Connecteur événements – OpenAgenda v2.
-Recherche les événements dans un rayon de ~30 km autour de Saintes-Maries-de-la-Mer.
+Recherche les événements dans un rayon de 30 km autour de Saintes-Maries-de-la-Mer.
 """
 
+import logging
 from datetime import date, timedelta
 
 import httpx
 
-OPENAGENDA_URL = "https://api.openagenda.com/v2/events"
+log = logging.getLogger(__name__)
 
-# Bounding box ~30 km autour de Saintes-Maries-de-la-Mer (43.4527, 4.4282)
-_BBOX = {
-    "geo[northEast][lat]": 43.75,
-    "geo[northEast][lng]": 4.73,
-    "geo[southWest][lat]": 43.15,
-    "geo[southWest][lng]": 4.13,
-}
+OPENAGENDA_URL = "https://api.openagenda.com/v2/events"
+LAT = 43.4527
+LON = 4.4282
 
 
 def fetch_events(api_key: str, days: int = 7) -> list[dict]:
@@ -29,21 +26,28 @@ def fetch_events(api_key: str, days: int = 7) -> list[dict]:
     today = date.today()
     end = today + timedelta(days=days - 1)
 
+    # OpenAgenda v2 : filtre géographique via relative[lat/lng/distance]
     params = {
         "key": api_key,
         "longdescription": 0,
         "size": 100,
+        "relative[lat]": LAT,
+        "relative[lng]": LON,
+        "relative[d]": 30,          # rayon en km
         "timings[gte]": today.isoformat(),
         "timings[lte]": end.isoformat(),
-        **_BBOX,
     }
 
     try:
         with httpx.Client(timeout=15) as client:
             resp = client.get(OPENAGENDA_URL, params=params)
             resp.raise_for_status()
-        return resp.json().get("events", [])
-    except Exception:
+        data = resp.json()
+        events = data.get("events", [])
+        log.info("OpenAgenda: %d événements trouvés", len(events))
+        return events
+    except Exception as exc:
+        log.warning("OpenAgenda fetch failed: %s", exc)
         return []
 
 
