@@ -72,7 +72,7 @@ def fetch_events(api_key: str, days: int = 7) -> list[dict]:
 
     params = {
         "api_key": api_key,
-        "geo_distance": f"{LAT},{LON},15km",
+        "geo_distance": f"{LAT},{LON},30km",
         "filters": 'type=="EntertainmentAndEvent" OR type=="Festival" OR type=="SocialEvent"',
         "page_size": 1,  # on veut juste le total
     }
