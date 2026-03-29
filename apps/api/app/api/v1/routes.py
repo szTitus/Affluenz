@@ -56,6 +56,23 @@ def debug_events_raw():
     return {"count": len(events), "events": events[:5]}
 
 
+@router.get("/debug/events-nofilter")
+def debug_events_nofilter():
+    """Test OpenAgenda sans filtre géo pour vérifier la clé API."""
+    import httpx
+    params = {
+        "key": settings.openagenda_key,
+        "longdescription": 0,
+        "size": 3,
+    }
+    try:
+        with httpx.Client(timeout=15) as client:
+            resp = client.get("https://api.openagenda.com/v2/events", params=params)
+        return {"status": resp.status_code, "body": resp.json()}
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
 @router.get("/events", response_model=list[EventOut])
 def list_events(db: Session = Depends(get_db)):
     return db.query(Event).order_by(Event.starts_at).all()
