@@ -58,16 +58,17 @@ def debug_events_raw():
 
 @router.get("/debug/events-nofilter")
 def debug_events_nofilter():
-    """Test OpenAgenda sans filtre géo pour vérifier la clé API."""
+    """Test DATAtourisme events sans filtre date pour vérifier la clé API."""
     import httpx
     params = {
-        "key": settings.openagenda_key,
-        "longdescription": 0,
-        "size": 3,
+        "api_key": settings.datatourisme_key,
+        "geo_distance": "43.4527,4.4282,30km",
+        "filters": "@type=in=(schema:Event,schema:Festival,schema:EntertainmentAndEvent)",
+        "page_size": 5,
     }
     try:
         with httpx.Client(timeout=15) as client:
-            resp = client.get("https://api.openagenda.com/v2/events", params=params)
+            resp = client.get("https://api.datatourisme.fr/v1/catalog", params=params)
         return {"status": resp.status_code, "body": resp.json()}
     except Exception as exc:
         return {"error": str(exc)}

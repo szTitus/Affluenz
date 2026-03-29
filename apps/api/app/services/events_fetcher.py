@@ -1,6 +1,7 @@
 """
-Connecteur événements – OpenAgenda v2.
-Recherche les événements dans un rayon de 30 km autour de Saintes-Maries-de-la-Mer.
+Connecteur événements – DATAtourisme (gratuit, même clé que l'hébergement).
+Recherche les fêtes et manifestations dans un rayon de 30 km autour de
+Saintes-Maries-de-la-Mer.
 """
 
 import logging
@@ -10,15 +11,15 @@ import httpx
 
 log = logging.getLogger(__name__)
 
-OPENAGENDA_URL = "https://api.openagenda.com/v2/events"
+DATATOURISME_URL = "https://api.datatourisme.fr/v1/catalog"
 LAT = 43.4527
 LON = 4.4282
 
 
 def fetch_events(api_key: str, days: int = 7) -> list[dict]:
     """
-    Retourne la liste des événements OpenAgenda pour les `days` prochains jours.
-    Retourne [] en cas d'erreur pour ne pas bloquer le scoring.
+    Retourne les événements DATAtourisme pour les `days` prochains jours.
+    Retourne [] en cas d'erreur.
     """
     if not api_key:
         return []
@@ -26,28 +27,27 @@ def fetch_events(api_key: str, days: int = 7) -> list[dict]:
     today = date.today()
     end = today + timedelta(days=days - 1)
 
-    # OpenAgenda v2 : filtre géographique via relative[lat/lng/distance]
     params = {
-        "key": api_key,
-        "longdescription": 0,
-        "size": 100,
-        "relative[lat]": LAT,
-        "relative[lng]": LON,
-        "relative[d]": 30,          # rayon en km
-        "timings[gte]": today.isoformat(),
-        "timings[lte]": end.isoformat(),
+        "api_key": api_key,
+        "geo_distance": f"{LAT},{LON},30km",
+        "filters": "@type=in=(schema:Event,schema:Festival,schema:SportsEvent,"
+                   "schema:EntertainmentAndEvent,schema:MusicEvent,"
+                   "schema:VisualArtsEvent,schema:TheaterEvent)",
+        "dateBegin": today.isoformat(),
+        "dateEnd": end.isoformat(),
+        "page_size": 100,
     }
 
     try:
         with httpx.Client(timeout=15) as client:
-            resp = client.get(OPENAGENDA_URL, params=params)
+            resp = client.get(DATATOURISME_URL, params=params)
             resp.raise_for_status()
         data = resp.json()
-        events = data.get("events", [])
-        log.info("OpenAgenda: %d événements trouvés", len(events))
+        events = data.get("data", data.get("results", []))
+        log.info("DATAtourisme events: %d trouvés", len(events))
         return events
     except Exception as exc:
-        log.warning("OpenAgenda fetch failed: %s", exc)
+        log.warning("DATAtourisme events fetch failed: %s", exc)
         return []
 
 
@@ -60,12 +60,13 @@ def compute_event_score(target: date, events: list[dict]) -> float:
     count = 0
 
     for event in events:
-        for timing in event.get("timings", []):
-            start = (timing.get("begin") or "")[:10]
-            end = (timing.get("end") or "")[:10]
-            if start and end and start <= target_str <= end:
-                count += 1
-                break  # on compte l'événement une seule fois
+        # Format DATAtourisme : dateBegin / dateEnd au niveau racine
+        start = (event.get("dateBegin") or event.get("startDate") or "")[:10]
+        end = (event.get("dateEnd") or event.get("endDate") or "")[:10]
+        if start and end and start <= target_str <= end:
+            count += 1
+        elif start and start == target_str:
+            count += 1
 
     scores = [10.0, 30.0, 50.0, 65.0, 78.0, 90.0]
     return scores[min(count, len(scores) - 1)]
