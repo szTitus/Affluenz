@@ -1,7 +1,9 @@
 """
-Connecteur événements – DATAtourisme (même clé que l'hébergement).
-Recherche les fêtes et manifestations dans un rayon de 30 km autour de
-Saintes-Maries-de-la-Mer.
+Connecteur événements – DATAtourisme + événements annuels connus.
+
+Deux sources combinées :
+1. DATAtourisme : compte les événements référencés dans la zone (proxy d'activité)
+2. Calendrier annuel hardcodé : grands événements de Saintes-Maries-de-la-Mer
 """
 
 import logging
@@ -15,98 +17,102 @@ log = logging.getLogger(__name__)
 DATATOURISME_URL = "https://api.datatourisme.fr/v1/catalog"
 LAT = 43.4527
 LON = 4.4282
-# Rayon réduit à 15km pour rester centré sur Saintes-Maries, exclure Arles
-_RADIUS = "15km"
 
-# Cache simple 1h pour éviter des appels répétés
-_cache: tuple[list[dict], float] = ([], 0.0)
+# Cache simple 1h
+_cache: tuple[int, float] = (0, 0.0)
 _CACHE_TTL = 3600
+
+# Événements annuels connus à Saintes-Maries-de-la-Mer
+# Format : (mois, jour_debut, mois, jour_fin, impact 1-5)
+_ANNUAL_EVENTS: list[tuple[int, int, int, int, int]] = [
+    (5, 24, 5, 26, 5),   # Pèlerinage des Gitans (24-25 mai) → énorme
+    (5, 1,  5, 1,  3),   # Fête du travail / début saison
+    (7, 14, 7, 14, 3),   # Fête nationale
+    (8, 15, 8, 15, 3),   # Assomption
+    (7, 1,  8, 31, 2),   # Saison estivale (boost continu)
+    (10, 17, 10, 20, 4), # Pèlerinage d'octobre (3ème dimanche)
+]
+
+
+def _annual_event_count(target: date) -> int:
+    """Retourne le nombre d'événements annuels actifs ce jour-là."""
+    count = 0
+    for m_start, d_start, m_end, d_end, _ in _ANNUAL_EVENTS:
+        start = date(target.year, m_start, d_start)
+        end = date(target.year, m_end, d_end)
+        if start <= target <= end:
+            count += 1
+    return count
+
+
+def _annual_event_impact(target: date) -> int:
+    """Retourne l'impact max des événements annuels ce jour-là (0-5)."""
+    impact = 0
+    for m_start, d_start, m_end, d_end, evt_impact in _ANNUAL_EVENTS:
+        start = date(target.year, m_start, d_start)
+        end = date(target.year, m_end, d_end)
+        if start <= target <= end:
+            impact = max(impact, evt_impact)
+    return impact
 
 
 def fetch_events(api_key: str, days: int = 7) -> list[dict]:
     """
-    Retourne les événements DATAtourisme pour les `days` prochains jours.
-    Retourne [] en cas d'erreur.
+    Retourne le nombre d'événements DATAtourisme dans la zone (cache 1h).
+    On retourne une liste de dicts fictifs de longueur = total pour
+    rester compatible avec compute_event_score.
     """
     global _cache
-    cached_events, ts = _cache
-    if cached_events and (time.time() - ts) < _CACHE_TTL:
-        return cached_events
+    cached_count, ts = _cache
+    if cached_count > 0 and (time.time() - ts) < _CACHE_TTL:
+        return [{}] * cached_count
 
     if not api_key:
         return []
 
-    today = date.today()
-    end = today + timedelta(days=days - 1)
-
     params = {
         "api_key": api_key,
-        "geo_distance": f"{LAT},{LON},{_RADIUS}",
-        "filters": 'type=="EntertainmentAndEvent" OR type=="Festival" OR type=="SocialEvent" OR type=="Concert"',
-        "page_size": 100,
+        "geo_distance": f"{LAT},{LON},15km",
+        "filters": 'type=="EntertainmentAndEvent" OR type=="Festival" OR type=="SocialEvent"',
+        "page_size": 1,  # on veut juste le total
     }
 
     try:
         with httpx.Client(timeout=15) as client:
             resp = client.get(DATATOURISME_URL, params=params)
             resp.raise_for_status()
-        data = resp.json()
-        events = data.get("objects", [])
-        log.info("DATAtourisme events: %d trouvés dans la zone", len(events))
-        _cache = (events, time.time())
-        return events
+        total = resp.json().get("meta", {}).get("total", 0)
+        log.info("DATAtourisme: %d événements dans la zone", total)
+        _cache = (total, time.time())
+        return [{}] * total
     except Exception as exc:
         log.warning("DATAtourisme events fetch failed: %s", exc)
-        return cached_events
-
-
-def _get_event_dates(event: dict) -> tuple[str, str]:
-    """Extrait les dates de début et fin d'un événement DATAtourisme."""
-    # Champ direct
-    start = (event.get("startDate") or event.get("dateBegin") or "")[:10]
-    end = (event.get("endDate") or event.get("dateEnd") or "")[:10]
-
-    # Cherche dans les sous-champs si pas trouvé
-    if not start:
-        for timing in event.get("hasSchedule", []):
-            start = (timing.get("startDate") or timing.get("startTime") or "")[:10]
-            end = (timing.get("endDate") or timing.get("endTime") or "")[:10]
-            if start:
-                break
-
-    # Fallback : lastUpdate comme date de référence
-    if not start:
-        last = event.get("lastUpdate") or event.get("lastUpdateDatatourisme") or ""
-        start = last[:10]
-        end = last[:10]
-
-    return start, end
+        return [{}] * cached_count
 
 
 def compute_event_score(target: date, events: list[dict]) -> float:
     """
-    Compte les événements actifs le jour `target` et retourne un score 0-100.
-    Barème : 0 → 10, 1 → 30, 2 → 50, 3 → 65, 4 → 78, 5+ → 90.
+    Score événements 0-100 basé sur :
+    - Les événements annuels connus (Pèlerinage, etc.)
+    - La densité d'événements DATAtourisme dans la zone
     """
-    if not events:
-        return 10.0
+    # 1. Événements annuels connus
+    impact = _annual_event_impact(target)
+    if impact >= 5:
+        return 95.0
+    if impact >= 4:
+        return 80.0
+    if impact >= 3:
+        return 65.0
+    if impact >= 2:
+        return 50.0
+    if impact >= 1:
+        return 40.0
 
-    target_str = target.isoformat()
-    count = 0
-
-    for event in events:
-        start, end = _get_event_dates(event)
-        if not start:
-            continue
-        if not end:
-            end = start
-        if start <= target_str <= end:
-            count += 1
-
-    # Bonus si beaucoup d'événements dans la zone (indique une période active)
+    # 2. Densité DATAtourisme comme proxy d'activité de fond
     total = len(events)
-    if count == 0 and total >= 50:
-        count = 1  # zone avec beaucoup d'événements permanents → score de base plus haut
-
-    scores = [10.0, 30.0, 50.0, 65.0, 78.0, 90.0]
-    return scores[min(count, len(scores) - 1)]
+    if total >= 50:
+        return 30.0  # zone très active
+    if total >= 10:
+        return 20.0
+    return 10.0
