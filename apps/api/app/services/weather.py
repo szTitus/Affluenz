@@ -31,7 +31,7 @@ def fetch_weather_scores() -> dict[str, float]:
     params = {
         "latitude": LAT,
         "longitude": LON,
-        "daily": "weathercode,temperature_2m_max",
+        "daily": "weathercode,temperature_2m_max,windspeed_10m_max",
         "timezone": "Europe/Paris",
         "forecast_days": 7,
     }
@@ -42,12 +42,14 @@ def fetch_weather_scores() -> dict[str, float]:
     data = resp.json()
     result: dict[str, float] = {}
 
-    for date_str, wcode, tmax in zip(
+    for date_str, wcode, tmax, wind in zip(
         data["daily"]["time"],
         data["daily"]["weathercode"],
         data["daily"]["temperature_2m_max"],
+        data["daily"]["windspeed_10m_max"],
     ):
         score = _WMO_SCORE.get(int(wcode), 50.0)
+
         # Bonus température : Saintes-Maries vit du soleil et de la chaleur
         if tmax is not None:
             if tmax >= 28:
@@ -56,6 +58,16 @@ def fetch_weather_scores() -> dict[str, float]:
                 score = min(100.0, score + 5)
             elif tmax < 10:
                 score = max(0.0, score - 15)
+
+        # Pénalité vent : le mistral vide le village
+        if wind is not None:
+            if wind >= 80:
+                score = max(0.0, score - 40)
+            elif wind >= 60:
+                score = max(0.0, score - 25)
+            elif wind >= 40:
+                score = max(0.0, score - 12)
+
         result[date_str] = round(score, 1)
 
     return result
