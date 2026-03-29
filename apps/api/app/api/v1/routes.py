@@ -66,14 +66,28 @@ def debug_events_nofilter():
         "filters": "@type=in=(schema:Event,schema:Festival,schema:EntertainmentAndEvent)",
         "page_size": 5,
     }
+    key = settings.datatourisme_key
+    results = {}
     try:
         with httpx.Client(timeout=15) as client:
-            resp = client.get(
-                "https://api.datatourisme.fr/v1/catalog",
-                params=params,
-                headers={"X-API-Key": settings.datatourisme_key},
-            )
-        return {"status": resp.status_code, "body": resp.json()}
+            # Test 1 : api_key en query param
+            r1 = client.get("https://api.datatourisme.fr/v1/catalog",
+                            params={**params, "api_key": key})
+            results["query_param"] = r1.status_code
+
+            # Test 2 : X-API-Key header
+            r2 = client.get("https://api.datatourisme.fr/v1/catalog",
+                            params=params,
+                            headers={"X-API-Key": key})
+            results["x_api_key_header"] = r2.status_code
+
+            # Test 3 : Authorization Bearer
+            r3 = client.get("https://api.datatourisme.fr/v1/catalog",
+                            params=params,
+                            headers={"Authorization": f"Bearer {key}"})
+            results["bearer"] = r3.status_code
+
+        return {"key_preview": key[:8] + "...", "results": results}
     except Exception as exc:
         return {"error": str(exc)}
 
