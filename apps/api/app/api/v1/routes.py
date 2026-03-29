@@ -75,7 +75,7 @@ def debug_events_nofilter():
                     "api_key": key,
                     "page_size": 5,
                     "geo_distance": "43.4527,4.4282,30km",
-                    "filters": 'type=in=(EntertainmentAndEvent,Festival,SocialEvent,Concert)',
+                    "filters": 'type=="EntertainmentAndEvent" OR type=="Festival" OR type=="SocialEvent"',
                 },
             )
         return {"status": resp.status_code, "body": resp.json()}
