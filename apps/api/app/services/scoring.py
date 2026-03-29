@@ -72,7 +72,7 @@ def refresh_scores(db: Session) -> None:
 
     # 2. Événements (OpenAgenda)
     try:
-        events = fetch_events(settings.openagenda_key, days=7)
+        events = fetch_events(settings.datatourisme_key, days=7)
     except Exception:
         events = []
 
