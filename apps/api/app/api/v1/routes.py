@@ -68,7 +68,11 @@ def debug_events_nofilter():
     }
     try:
         with httpx.Client(timeout=15) as client:
-            resp = client.get("https://api.datatourisme.fr/v1/catalog", params=params)
+            resp = client.get(
+                "https://api.datatourisme.fr/v1/catalog",
+                params=params,
+                headers={"X-API-Key": settings.datatourisme_key},
+            )
         return {"status": resp.status_code, "body": resp.json()}
     except Exception as exc:
         return {"error": str(exc)}
