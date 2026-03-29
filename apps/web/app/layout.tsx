@@ -3,6 +3,9 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "Affluence – Village touristique",
   description: "Indice d'affluence en temps réel",
+  icons: {
+    icon: "/icon.svg",
+  },
 };
 
 export default function RootLayout({
