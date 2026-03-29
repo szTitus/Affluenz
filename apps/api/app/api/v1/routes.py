@@ -1,6 +1,6 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -19,8 +19,13 @@ def health():
 
 
 @router.post("/refresh", status_code=200)
-def trigger_refresh(db: Session = Depends(get_db)):
-    """Recalcule les scores à partir des sources externes."""
+def trigger_refresh(
+    db: Session = Depends(get_db),
+    x_refresh_secret: str = Header(default=""),
+):
+    """Recalcule les scores. Nécessite le header X-Refresh-Secret."""
+    if x_refresh_secret != settings.refresh_secret:
+        raise HTTPException(status_code=401, detail="Invalid secret.")
     refresh_scores(db)
     return {"status": "refreshed"}
 
