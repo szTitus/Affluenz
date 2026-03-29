@@ -31,7 +31,7 @@ def fetch_weather_scores() -> dict[str, float]:
     params = {
         "latitude": LAT,
         "longitude": LON,
-        "daily": "weathercode,temperature_2m_max,windspeed_10m_max",
+        "daily": "weather_code,temperature_2m_max,wind_speed_10m_max",
         "timezone": "Europe/Paris",
         "forecast_days": 7,
     }
@@ -40,13 +40,16 @@ def fetch_weather_scores() -> dict[str, float]:
         resp.raise_for_status()
 
     data = resp.json()
+    daily = data["daily"]
     result: dict[str, float] = {}
 
+    winds = daily.get("wind_speed_10m_max") or [None] * len(daily["time"])
+
     for date_str, wcode, tmax, wind in zip(
-        data["daily"]["time"],
-        data["daily"]["weathercode"],
-        data["daily"]["temperature_2m_max"],
-        data["daily"]["windspeed_10m_max"],
+        daily["time"],
+        daily["weather_code"],
+        daily["temperature_2m_max"],
+        winds,
     ):
         score = _WMO_SCORE.get(int(wcode), 50.0)
 

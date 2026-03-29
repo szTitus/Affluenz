@@ -9,6 +9,7 @@ Sources :
 """
 
 from datetime import date, timedelta
+from app.services.availability import _easter, _french_public_holidays, _is_easter_weekend
 
 from sqlalchemy.orm import Session
 
@@ -43,8 +44,15 @@ def _compute_price_score(target: date) -> float:
         score += 18
     elif target.month == 9:
         score += 10
+    elif target.month in (4, 5):
+        score += 8
     if target.weekday() >= 5:
         score += 10
+    # Pâques = prix au plus haut hors saison
+    if _is_easter_weekend(target):
+        score += 20
+    elif target in _french_public_holidays(target.year):
+        score += 12
     return min(100.0, round(score, 1))
 
 
