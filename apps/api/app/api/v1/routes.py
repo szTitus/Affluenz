@@ -69,10 +69,14 @@ def debug_events_nofilter():
     key = settings.datatourisme_key
     try:
         with httpx.Client(timeout=15) as client:
-            # Test minimal : juste la clé et la taille
             resp = client.get(
                 "https://api.datatourisme.fr/v1/catalog",
-                params={"api_key": key, "page_size": 3},
+                params={
+                    "api_key": key,
+                    "page_size": 5,
+                    "geo_distance": "43.4527,4.4282,30km",
+                    "filters": 'type=in=(EntertainmentAndEvent,Festival,SocialEvent,Concert)',
+                },
             )
         return {"status": resp.status_code, "body": resp.json()}
     except Exception as exc:
