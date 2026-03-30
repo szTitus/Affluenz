@@ -236,12 +236,10 @@ export default async function HomePage() {
       <footer style={{ marginTop: 48, color: "#334155", fontSize: 12 }}>
         Affluence V2 · données de démo ·{" "}
         <a
-          href={`${PUBLIC_API}/docs`}
+          href="https://app.affluence13460.fr"
           style={{ color: "#475569" }}
-          target="_blank"
-          rel="noreferrer"
         >
-          API Swagger
+          Affluence13460
         </a>
       </footer>
     </main>

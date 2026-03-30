@@ -40,6 +40,9 @@ app = FastAPI(
     version="3.0.0",
     description="API d'estimation de l'affluence – Saintes-Maries-de-la-Mer.",
     lifespan=lifespan,
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
 )
 
 app.add_middleware(
