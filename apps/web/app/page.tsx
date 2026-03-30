@@ -234,13 +234,7 @@ export default async function HomePage() {
       </section>
 
       <footer style={{ marginTop: 48, color: "#334155", fontSize: 12 }}>
-        Affluence V2 · données de démo ·{" "}
-        <a
-          href="https://app.affluence13460.fr"
-          style={{ color: "#475569" }}
-        >
-          Affluence13460
-        </a>
+        Affluence · Saintes-Maries-de-la-Mer
       </footer>
     </main>
   );
