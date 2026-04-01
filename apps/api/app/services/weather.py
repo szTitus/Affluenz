@@ -1,75 +1,112 @@
 """
-Connecteur météo – Open-Meteo (gratuit, sans clé API).
+Connecteur météo – OpenWeatherMap (clé API requise).
+Utilise l'API One Call 3.0 ou la Forecast 5-day/3h.
 Coordonnées : Saintes-Maries-de-la-Mer.
 """
 
 import httpx
+from datetime import date, timedelta
 
-OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
+from app.core.config import settings
+
+OWM_FORECAST_URL = "https://api.openweathermap.org/data/2.5/forecast"
 LAT = 43.4527
 LON = 4.4282
 
-# WMO weather code → score de base (0-100)
-_WMO_SCORE: dict[int, float] = {
-    0: 100,               # ciel dégagé
-    1: 92, 2: 80, 3: 65,  # peu nuageux → couvert
-    45: 50, 48: 45,       # brouillard
-    51: 40, 53: 35, 55: 30, 56: 25, 57: 20,  # bruine
-    61: 30, 63: 22, 65: 15, 66: 15, 67: 10,  # pluie
-    71: 15, 73: 10, 75: 5, 77: 5,            # neige
-    80: 35, 81: 25, 82: 15,                  # averses
-    85: 10, 86: 5,                            # averses de neige
-    95: 10, 96: 5, 99: 5,                    # orages
+# OpenWeatherMap condition ID → score de base (0-100)
+# Ref: https://openweathermap.org/weather-conditions
+_OWM_SCORE: dict[int, float] = {
+    800: 100,  # ciel dégagé
+    801: 90,   # peu nuageux
+    802: 78,   # nuages épars
+    803: 60,   # nuages fragmentés
+    804: 50,   # couvert
 }
+
+
+def _condition_score(condition_id: int) -> float:
+    """Retourne un score basé sur l'ID de condition OWM."""
+    if condition_id in _OWM_SCORE:
+        return _OWM_SCORE[condition_id]
+    group = condition_id // 100
+    if group == 2:   # orage
+        return 10.0
+    if group == 3:   # bruine
+        return 35.0
+    if group == 5:   # pluie
+        if condition_id <= 501:
+            return 30.0
+        return 15.0
+    if group == 6:   # neige
+        return 10.0
+    if group == 7:   # brouillard, brume
+        return 45.0
+    return 50.0
 
 
 def fetch_weather_scores() -> dict[str, float]:
     """
-    Retourne {date_iso: score} pour les 7 prochains jours.
-    En cas d'erreur, retourne un dict vide (le scoring utilisera 50 par défaut).
+    Retourne {date_iso: score} pour les 5 prochains jours.
+    Agrège les prévisions 3h en un score journalier.
     """
+    api_key = settings.openweathermap_key
+    if not api_key:
+        return {}
+
     params = {
-        "latitude": LAT,
-        "longitude": LON,
-        "daily": "weather_code,temperature_2m_max,wind_speed_10m_max",
-        "timezone": "Europe/Paris",
-        "forecast_days": 7,
+        "lat": LAT,
+        "lon": LON,
+        "appid": api_key,
+        "units": "metric",
     }
+
     with httpx.Client(timeout=10) as client:
-        resp = client.get(OPEN_METEO_URL, params=params)
+        resp = client.get(OWM_FORECAST_URL, params=params)
         resp.raise_for_status()
 
     data = resp.json()
-    daily = data["daily"]
+
+    # Agrégation par jour : temp max, vent max, pire condition
+    days: dict[str, dict] = {}
+
+    for entry in data.get("list", []):
+        dt_txt = entry["dt_txt"][:10]  # "2026-03-30"
+        if dt_txt not in days:
+            days[dt_txt] = {"tmax": -99, "wind_max": 0, "conditions": []}
+
+        temp = entry["main"]["temp_max"]
+        wind = entry["wind"]["speed"] * 3.6  # m/s → km/h
+        cond_id = entry["weather"][0]["id"]
+
+        day = days[dt_txt]
+        day["tmax"] = max(day["tmax"], temp)
+        day["wind_max"] = max(day["wind_max"], wind)
+        day["conditions"].append(cond_id)
+
     result: dict[str, float] = {}
 
-    winds = daily.get("wind_speed_10m_max") or [None] * len(daily["time"])
+    for date_str, day in days.items():
+        # Score = pire condition météo de la journée
+        worst_score = min(_condition_score(c) for c in day["conditions"])
+        score = worst_score
 
-    for date_str, wcode, tmax, wind in zip(
-        daily["time"],
-        daily["weather_code"],
-        daily["temperature_2m_max"],
-        winds,
-    ):
-        score = _WMO_SCORE.get(int(wcode), 50.0)
+        # Bonus température
+        tmax = day["tmax"]
+        if tmax >= 28:
+            score = min(100.0, score + 10)
+        elif tmax >= 22:
+            score = min(100.0, score + 5)
+        elif tmax < 10:
+            score = max(0.0, score - 15)
 
-        # Bonus température : Saintes-Maries vit du soleil et de la chaleur
-        if tmax is not None:
-            if tmax >= 28:
-                score = min(100.0, score + 10)
-            elif tmax >= 22:
-                score = min(100.0, score + 5)
-            elif tmax < 10:
-                score = max(0.0, score - 15)
-
-        # Pénalité vent : le mistral vide le village
-        if wind is not None:
-            if wind >= 80:
-                score = max(0.0, score - 40)
-            elif wind >= 60:
-                score = max(0.0, score - 25)
-            elif wind >= 40:
-                score = max(0.0, score - 12)
+        # Pénalité vent (mistral)
+        wind = day["wind_max"]
+        if wind >= 80:
+            score = max(0.0, score - 40)
+        elif wind >= 60:
+            score = max(0.0, score - 25)
+        elif wind >= 40:
+            score = max(0.0, score - 12)
 
         result[date_str] = round(score, 1)
 
