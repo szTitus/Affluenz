@@ -1,7 +1,7 @@
 """
 Connecteur Booking.com via RapidAPI (tipsters).
 Récupère les disponibilités et prix moyens pour Saintes-Maries-de-la-Mer.
-Cache 24h pour respecter le quota gratuit (~50 req/mois).
+Cache 24h par date – 7 requêtes/jour (une par jour de prévision).
 """
 
 import logging
@@ -18,8 +18,8 @@ BOOKING_SEARCH_URL = "https://booking-com.p.rapidapi.com/v1/hotels/search"
 DEST_ID = "-1437348"  # Saintes-Maries-de-la-Mer dest_id sur Booking
 DEST_TYPE = "city"
 
-# Cache 24h
-_cache: tuple[dict, float] = ({}, 0.0)
+# Cache 24h par date : {date_iso: (result_dict, timestamp)}
+_cache: dict[str, tuple[dict, float]] = {}
 _CACHE_TTL = 86400
 
 
@@ -33,17 +33,22 @@ def _headers() -> dict:
 def fetch_booking_data(checkin: date, checkout: date) -> dict:
     """
     Recherche les hôtels disponibles pour une nuit donnée.
-    Retourne {"available": int, "avg_price": float, "total": int}.
-    Cache 24h.
+    Retourne {"available_hotels": int, "avg_price": float}.
+    Cache 24h par date.
     """
-    global _cache
-    cached, ts = _cache
     cache_key = checkin.isoformat()
-    if cache_key in cached and (time.time() - ts) < _CACHE_TTL:
-        return cached[cache_key]
+
+    # Vérifier le cache pour cette date spécifique
+    if cache_key in _cache:
+        cached_result, cached_ts = _cache[cache_key]
+        if (time.time() - cached_ts) < _CACHE_TTL:
+            return cached_result
 
     if not settings.rapidapi_key:
         return {}
+
+    # Pause entre les requêtes pour éviter le rate-limit RapidAPI
+    time.sleep(1.5)
 
     params = {
         "dest_id": DEST_ID,
@@ -78,15 +83,17 @@ def fetch_booking_data(checkin: date, checkout: date) -> dict:
             "avg_price": round(sum(prices) / len(prices), 2) if prices else 0,
         }
 
-        cached[cache_key] = result
-        _cache = (cached, time.time())
-        log.info("Booking: %d hôtels dispo, prix moyen %.0f€",
-                 result["available_hotels"], result["avg_price"])
+        _cache[cache_key] = (result, time.time())
+        log.info("Booking [%s]: %d hôtels dispo, prix moyen %.0f€",
+                 cache_key, result["available_hotels"], result["avg_price"])
         return result
 
     except Exception as exc:
-        log.warning("Booking fetch failed: %s", exc)
-        return cached.get(cache_key, {})
+        log.warning("Booking fetch failed [%s]: %s", cache_key, exc)
+        # Retourner le cache expiré si disponible
+        if cache_key in _cache:
+            return _cache[cache_key][0]
+        return {}
 
 
 def compute_booking_scores(target: date) -> tuple[float, float]:
