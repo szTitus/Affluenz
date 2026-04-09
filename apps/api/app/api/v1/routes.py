@@ -93,7 +93,9 @@ def debug_booking():
     return {
         "key_preview": settings.rapidapi_key[:8] + "..." if settings.rapidapi_key else "EMPTY",
         "checkin": today.isoformat(),
-        "result": data,
+        "hotels": data.get("available_hotels", 0),
+        "rooms": data.get("available_rooms", 0),
+        "avg_price": data.get("avg_price", 0),
     }
 
 
