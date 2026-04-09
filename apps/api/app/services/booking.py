@@ -67,8 +67,6 @@ def fetch_booking_data(checkin: date, checkout: date) -> dict:
 
         data = resp.json()
         results = data.get("result", [])
-        total = data.get("count", 0)
-
         prices = []
         for hotel in results:
             price = hotel.get("min_total_price") or hotel.get("price_breakdown", {}).get("gross_price")
@@ -78,7 +76,6 @@ def fetch_booking_data(checkin: date, checkout: date) -> dict:
         result = {
             "available": len(results),
             "avg_price": round(sum(prices) / len(prices), 2) if prices else 0,
-            "total": total,
         }
 
         cached[cache_key] = result
@@ -99,19 +96,18 @@ def compute_booking_scores(target: date) -> tuple[float, float]:
     checkout = target + timedelta(days=1)
     data = fetch_booking_data(target, checkout)
 
-    if not data or not data.get("total"):
+    if not data or not data.get("available"):
         return 0.0, 0.0
 
-    total = data["total"]
     available = data["available"]
     avg_price = data["avg_price"]
 
-    # Score disponibilité : moins il y a de dispo, plus c'est fréquenté
-    if total > 0:
-        occupancy_rate = max(0, 1 - (available / max(total, 1)))
-        avail_score = round(occupancy_rate * 100, 1)
-    else:
-        avail_score = 0.0
+    # Score disponibilité basé sur le nombre d'hôtels disponibles.
+    # Saintes-Maries a ~30-40 hébergements au total.
+    # Moins il y en a de dispo, plus c'est fréquenté.
+    TOTAL_ESTIMATED = 35  # estimation du parc hôtelier total
+    occupancy_rate = max(0, 1 - (available / TOTAL_ESTIMATED))
+    avail_score = round(min(100.0, occupancy_rate * 100), 1)
 
     # Score prix : échelle 0-100 basée sur le prix moyen
     # <50€ = 20, 50-80€ = 40, 80-120€ = 60, 120-180€ = 80, >180€ = 95
