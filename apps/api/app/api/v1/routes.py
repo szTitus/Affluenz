@@ -86,16 +86,43 @@ def debug_events_raw():
 
 @router.get("/debug/booking")
 def debug_booking():
-    """Test Booking.com API."""
+    """Test Booking.com API — affiche les champs d'un hôtel pour debug."""
     from datetime import date, timedelta
+    import httpx
     today = date.today()
-    data = fetch_booking_data(today, today + timedelta(days=1))
+    if not settings.rapidapi_key:
+        return {"error": "no key"}
+    params = {
+        "dest_id": "-1437348", "dest_type": "city",
+        "checkin_date": today.isoformat(),
+        "checkout_date": (today + timedelta(days=1)).isoformat(),
+        "adults_number": 2, "room_number": 1, "units": "metric",
+        "order_by": "price", "locale": "fr", "currency": "EUR",
+        "filter_by_currency": "EUR", "page_number": 0,
+    }
+    headers = {
+        "X-RapidAPI-Key": settings.rapidapi_key,
+        "X-RapidAPI-Host": "booking-com.p.rapidapi.com",
+    }
+    with httpx.Client(timeout=20) as client:
+        resp = client.get("https://booking-com.p.rapidapi.com/v1/hotels/search",
+                          params=params, headers=headers)
+    data = resp.json()
+    results = data.get("result", [])
+    if not results:
+        return {"hotels": 0}
+    # Retourne les clés du premier hôtel + un extrait des 3 premiers
+    first = results[0]
+    sample = [
+        {k: h.get(k) for k in ("hotel_name", "available_rooms", "rooms_left",
+                                 "number_of_rooms", "room_count", "min_total_price",
+                                 "unit_configuration_label")}
+        for h in results[:3]
+    ]
     return {
-        "key_preview": settings.rapidapi_key[:8] + "..." if settings.rapidapi_key else "EMPTY",
-        "checkin": today.isoformat(),
-        "hotels": data.get("available_hotels", 0),
-        "rooms": data.get("available_rooms", 0),
-        "avg_price": data.get("avg_price", 0),
+        "total_hotels": len(results),
+        "first_hotel_keys": sorted(first.keys()),
+        "sample": sample,
     }
 
 
