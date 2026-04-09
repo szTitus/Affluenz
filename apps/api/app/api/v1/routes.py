@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.services.booking import fetch_booking_data
 from app.db.session import get_db
 from app.models.affluence import AffluenceScore, Event
 from app.schemas.affluence import AffluenceOut, EventIn, EventOut
@@ -81,6 +82,19 @@ def debug_events_raw():
         }
     except Exception as exc:
         return {"error": str(exc), "key_preview": key[:8] + "..." if key else "EMPTY"}
+
+
+@router.get("/debug/booking")
+def debug_booking():
+    """Test Booking.com API."""
+    from datetime import date, timedelta
+    today = date.today()
+    data = fetch_booking_data(today, today + timedelta(days=1))
+    return {
+        "key_preview": settings.rapidapi_key[:8] + "..." if settings.rapidapi_key else "EMPTY",
+        "checkin": today.isoformat(),
+        "result": data,
+    }
 
 
 @router.get("/debug/events-nofilter")
