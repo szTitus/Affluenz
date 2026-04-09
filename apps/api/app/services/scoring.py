@@ -9,7 +9,7 @@ Sources :
 """
 
 from datetime import date, timedelta
-from app.services.availability import _easter, _french_public_holidays, _is_easter_weekend
+from app.services.availability import _easter, _french_public_holidays, _is_easter_weekend, _zones_on_holiday
 
 from sqlalchemy.orm import Session
 
@@ -37,8 +37,9 @@ def score_to_level(score: float) -> str:
 
 
 def _compute_price_score(target: date) -> float:
-    """Heuristique prix – sera remplacé par une vraie source en V4."""
+    """Heuristique prix – utilisé en fallback si pas de données Booking."""
     score = 40.0
+    # Saison
     if target.month in (7, 8):
         score += 30
     elif target.month == 6:
@@ -47,6 +48,7 @@ def _compute_price_score(target: date) -> float:
         score += 10
     elif target.month in (4, 5):
         score += 8
+    # Week-end
     if target.weekday() >= 5:
         score += 10
     # Pâques = prix au plus haut hors saison
@@ -54,6 +56,12 @@ def _compute_price_score(target: date) -> float:
         score += 20
     elif target in _french_public_holidays(target.year):
         score += 12
+    # Vacances scolaires : les prix montent avec le nombre de zones en vacances
+    zones = _zones_on_holiday(target)
+    if zones >= 2:
+        score += 15
+    elif zones == 1:
+        score += 8
     return min(100.0, round(score, 1))
 
 
