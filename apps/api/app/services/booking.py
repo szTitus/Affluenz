@@ -47,8 +47,8 @@ def fetch_booking_data(checkin: date, checkout: date) -> dict:
     if not settings.rapidapi_key:
         return {}
 
-    # Pause entre les requêtes pour éviter le rate-limit RapidAPI
-    time.sleep(1.5)
+    # Petite pause entre les requêtes pour éviter le rate-limit RapidAPI
+    time.sleep(0.5)
 
     params = {
         "dest_id": DEST_ID,

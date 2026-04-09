@@ -21,12 +21,13 @@ def _scheduled_refresh():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Init DB + premier calcul des scores
+    # Init DB
     init_db()
-    _scheduled_refresh()
 
-    # Scheduler : recalcul toutes les heures
+    # Scheduler : recalcul toutes les heures + premier refresh 5s après démarrage
     scheduler = BackgroundScheduler()
+    scheduler.add_job(_scheduled_refresh, "date", id="initial_refresh",
+                      run_date=None)  # exécute immédiatement en background
     scheduler.add_job(_scheduled_refresh, "interval", hours=1, id="refresh_scores")
     scheduler.start()
 
