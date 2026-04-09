@@ -20,20 +20,55 @@ from app.services.events_fetcher import compute_event_score, fetch_events
 from app.services.booking import compute_booking_scores
 from app.services.weather import fetch_weather_scores
 
-WEIGHTS = {
-    "availability": 0.35,
-    "price": 0.25,
-    "event": 0.20,
-    "weather": 0.20,
-}
-
-
 def score_to_level(score: float) -> str:
     if score >= 70:
         return "high"
     if score >= 40:
         return "medium"
     return "low"
+
+
+def compute_global_score(avail: float, price: float, event: float,
+                         weather: float, target: date) -> float:
+    """
+    Calcule le score global à partir des 4 sous-scores.
+
+    Logique :
+      1. L'occupation fixe un score de base (signal le plus fort).
+      2. La météo, le prix et les événements modulent le score
+         à la hausse ou à la baisse autour de cette base.
+      3. Le week-end ajoute un bonus (plus de visiteurs à la journée).
+    """
+    # --- Score de base selon l'occupation ---
+    if avail >= 95:
+        base = 82
+    elif avail >= 85:
+        base = 72
+    elif avail >= 70:
+        base = 58
+    elif avail >= 50:
+        base = 42
+    elif avail >= 30:
+        base = 28
+    else:
+        base = 15
+
+    # --- Modificateurs (chacun entre -10 et +10 environ) ---
+
+    # Météo : beau temps = plus de monde, mauvais = moins
+    weather_mod = (weather - 50) / 5  # 0→-10, 50→0, 100→+10
+
+    # Prix : prix élevés = forte demande
+    price_mod = (price - 50) / 10  # 0→-5, 50→0, 100→+5
+
+    # Événements : attirent du monde
+    event_mod = event / 10  # 0→0, 30→+3, 100→+10
+
+    # Week-end : plus de monde (visiteurs journée + week-endeurs)
+    weekend_mod = 5 if target.weekday() >= 5 else 0
+
+    score = base + weather_mod + price_mod + event_mod + weekend_mod
+    return round(min(100.0, max(0.0, score)), 1)
 
 
 def _compute_price_score(target: date) -> float:
@@ -96,25 +131,10 @@ def refresh_scores(db: Session) -> None:
         avail = booking_avail if booking_avail > 0 else compute_availability_score(target)
         price = booking_price if booking_price > 0 else _compute_price_score(target)
         event = compute_event_score(target, events)
-        weather = weather_map.get(date_str, 50.0)
+        # Météo : défaut à 60 (plutôt neutre-positif) si pas de données
+        weather = weather_map.get(date_str, 60.0)
 
-        raw_score = (
-            avail * WEIGHTS["availability"]
-            + price * WEIGHTS["price"]
-            + event * WEIGHTS["event"]
-            + weather * WEIGHTS["weather"]
-        )
-
-        # Si l'occupation est très haute, le village EST bondé
-        # On garantit un score minimum proportionnel à l'occupation
-        if avail >= 90:
-            min_score = avail * 0.8  # 99% occupation → minimum 79
-        elif avail >= 75:
-            min_score = avail * 0.7
-        else:
-            min_score = 0
-
-        global_score = round(max(raw_score, min_score), 1)
+        global_score = compute_global_score(avail, price, event, weather, target)
         # Confiance plus haute si on a des données Booking réelles
         if booking_avail > 0:
             confidence = 0.95 if delta <= 1 else 0.85 if delta <= 3 else 0.70
