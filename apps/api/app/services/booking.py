@@ -103,10 +103,10 @@ def compute_booking_scores(target: date) -> tuple[float, float]:
     available = data["available_hotels"]
     avg_price = data["avg_price"]
 
-    # Score disponibilité basé sur les hôtels disponibles vs parc estimé.
-    # Saintes-Maries a ~35 hébergements sur Booking.
+    # Score disponibilité basé sur les hôtels disponibles vs parc réel.
+    # Saintes-Maries a 268 hébergements référencés sur Booking.
     # Moins il y en a de dispo, plus c'est fréquenté.
-    TOTAL_ESTIMATED = 35
+    TOTAL_ESTIMATED = 268
     occupancy_rate = max(0, 1 - (available / TOTAL_ESTIMATED))
     avail_score = round(min(100.0, occupancy_rate * 100), 1)
 
