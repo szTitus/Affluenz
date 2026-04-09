@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     openagenda_key: str = ""
     datatourisme_key: str = ""
     openweathermap_key: str = ""
+    rapidapi_key: str = ""
     allowed_origins: str = "http://localhost:3000"
     refresh_secret: str = "change-me-in-production"
 

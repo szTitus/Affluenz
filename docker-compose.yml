@@ -25,6 +25,7 @@ services:
       OPENAGENDA_KEY: ${OPENAGENDA_KEY:-}
       DATATOURISME_KEY: ${DATATOURISME_KEY:-}
       OPENWEATHERMAP_KEY: ${OPENWEATHERMAP_KEY:-}
+      RAPIDAPI_KEY: ${RAPIDAPI_KEY:-}
     depends_on:
       db:
         condition: service_healthy

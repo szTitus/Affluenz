@@ -17,6 +17,7 @@ from app.core.config import settings
 from app.models.affluence import AffluenceScore
 from app.services.availability import compute_availability_score
 from app.services.events_fetcher import compute_event_score, fetch_events
+from app.services.booking import compute_booking_scores
 from app.services.weather import fetch_weather_scores
 
 WEIGHTS = {
@@ -81,8 +82,11 @@ def refresh_scores(db: Session) -> None:
         target = today + timedelta(days=delta)
         date_str = target.isoformat()
 
-        avail = compute_availability_score(target)
-        price = _compute_price_score(target)
+        # Booking.com : vraies données si disponibles, sinon heuristique
+        booking_avail, booking_price = compute_booking_scores(target)
+
+        avail = booking_avail if booking_avail > 0 else compute_availability_score(target)
+        price = booking_price if booking_price > 0 else _compute_price_score(target)
         event = compute_event_score(target, events)
         weather = weather_map.get(date_str, 50.0)
 
@@ -93,7 +97,11 @@ def refresh_scores(db: Session) -> None:
             + weather * WEIGHTS["weather"],
             1,
         )
-        confidence = 0.85 if delta <= 1 else 0.70 if delta <= 3 else 0.55
+        # Confiance plus haute si on a des données Booking réelles
+        if booking_avail > 0:
+            confidence = 0.95 if delta <= 1 else 0.85 if delta <= 3 else 0.70
+        else:
+            confidence = 0.85 if delta <= 1 else 0.70 if delta <= 3 else 0.55
 
         existing = (
             db.query(AffluenceScore)
