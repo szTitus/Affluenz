@@ -68,28 +68,20 @@ def fetch_booking_data(checkin: date, checkout: date) -> dict:
         data = resp.json()
         results = data.get("result", [])
         prices = []
-        soldout_count = 0
-        urgent_count = 0  # hôtels avec peu de chambres restantes
         for hotel in results:
             price = hotel.get("min_total_price") or hotel.get("price_breakdown", {}).get("gross_price")
             if price:
                 prices.append(float(price))
-            if hotel.get("soldout"):
-                soldout_count += 1
-            if hotel.get("urgency_room_msg"):
-                urgent_count += 1
 
         result = {
             "available_hotels": len(results),
-            "soldout": soldout_count,
-            "urgent": urgent_count,
             "avg_price": round(sum(prices) / len(prices), 2) if prices else 0,
         }
 
         cached[cache_key] = result
         _cache = (cached, time.time())
-        log.info("Booking: %d hôtels dispo (%d soldout, %d urgent), prix moyen %.0f€",
-                 result["available_hotels"], soldout_count, urgent_count, result["avg_price"])
+        log.info("Booking: %d hôtels dispo, prix moyen %.0f€",
+                 result["available_hotels"], result["avg_price"])
         return result
 
     except Exception as exc:
@@ -109,16 +101,13 @@ def compute_booking_scores(target: date) -> tuple[float, float]:
         return 0.0, 0.0
 
     available = data["available_hotels"]
-    soldout = data.get("soldout", 0)
-    urgent = data.get("urgent", 0)
     avg_price = data["avg_price"]
 
     # Score disponibilité basé sur les hôtels disponibles vs parc estimé.
     # Saintes-Maries a ~35 hébergements sur Booking.
-    # On pondère : hôtels "urgent" (presque complets) comptent moins.
+    # Moins il y en a de dispo, plus c'est fréquenté.
     TOTAL_ESTIMATED = 35
-    effective_available = available - (urgent * 0.5)  # urgents = à moitié pris
-    occupancy_rate = max(0, 1 - (effective_available / TOTAL_ESTIMATED))
+    occupancy_rate = max(0, 1 - (available / TOTAL_ESTIMATED))
     avail_score = round(min(100.0, occupancy_rate * 100), 1)
 
     # Score prix : échelle 0-100 basée sur le prix moyen
