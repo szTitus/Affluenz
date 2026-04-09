@@ -98,13 +98,23 @@ def refresh_scores(db: Session) -> None:
         event = compute_event_score(target, events)
         weather = weather_map.get(date_str, 50.0)
 
-        global_score = round(
+        raw_score = (
             avail * WEIGHTS["availability"]
             + price * WEIGHTS["price"]
             + event * WEIGHTS["event"]
-            + weather * WEIGHTS["weather"],
-            1,
+            + weather * WEIGHTS["weather"]
         )
+
+        # Si l'occupation est très haute, le village EST bondé
+        # On garantit un score minimum proportionnel à l'occupation
+        if avail >= 90:
+            min_score = avail * 0.8  # 99% occupation → minimum 79
+        elif avail >= 75:
+            min_score = avail * 0.7
+        else:
+            min_score = 0
+
+        global_score = round(max(raw_score, min_score), 1)
         # Confiance plus haute si on a des données Booking réelles
         if booking_avail > 0:
             confidence = 0.95 if delta <= 1 else 0.85 if delta <= 3 else 0.70
