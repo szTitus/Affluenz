@@ -1,6 +1,7 @@
 // React Server Component – données chargées côté serveur au rendu.
 // Pour un rafraîchissement dynamique, convertir en Client Component avec fetch + useEffect.
 import ForecastChart from "./components/ForecastChart";
+import DayDetail from "./components/DayDetail";
 
 type AffluenceScore = {
   id: number;
@@ -157,80 +158,13 @@ export default async function HomePage() {
         <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>
           Prévisions 7 jours
         </h2>
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {forecast.length === 0 && (
-            <p style={{ color: "#64748b", fontSize: 14 }}>
-              Aucune prévision disponible.
-            </p>
-          )}
-          {forecast.map((day) => {
-            const cfg =
-              LEVEL_CONFIG[day.level] ?? LEVEL_CONFIG.medium;
-            const isToday =
-              day.score_date === today?.score_date;
-            return (
-              <div
-                key={day.id}
-                style={{
-                  background: isToday ? "#1e3a5f" : "#1e293b",
-                  borderRadius: 10,
-                  padding: "12px 16px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 16,
-                  border: isToday ? "1px solid #3b82f6" : "1px solid transparent",
-                }}
-              >
-                <div style={{ minWidth: 110, fontSize: 13, color: "#94a3b8" }}>
-                  {new Date(day.score_date + "T12:00:00").toLocaleDateString(
-                    "fr-FR",
-                    { weekday: "short", day: "numeric", month: "short" }
-                  )}
-                  {isToday && (
-                    <span
-                      style={{
-                        marginLeft: 6,
-                        fontSize: 10,
-                        background: "#3b82f6",
-                        color: "#fff",
-                        borderRadius: 4,
-                        padding: "1px 5px",
-                      }}
-                    >
-                      Auj.
-                    </span>
-                  )}
-                </div>
-                <div style={{ flex: 1 }}>
-                  <ScoreBar value={day.global_score} color={cfg.color} />
-                </div>
-                <div
-                  style={{
-                    minWidth: 36,
-                    textAlign: "right",
-                    fontWeight: 700,
-                    color: cfg.color,
-                  }}
-                >
-                  {day.global_score}
-                </div>
-                <div
-                  style={{
-                    minWidth: 72,
-                    textAlign: "right",
-                    fontSize: 12,
-                    background: cfg.bg,
-                    color: cfg.color,
-                    borderRadius: 6,
-                    padding: "2px 8px",
-                  }}
-                >
-                  {cfg.label}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        {forecast.length === 0 ? (
+          <p style={{ color: "#64748b", fontSize: 14 }}>
+            Aucune prévision disponible.
+          </p>
+        ) : (
+          <DayDetail forecast={forecast} todayDate={today?.score_date ?? null} />
+        )}
       </section>
 
       <footer style={{ marginTop: 48, color: "#334155", fontSize: 12 }}>
