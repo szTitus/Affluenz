@@ -73,6 +73,11 @@ export default function DayDetail({
                 gap: 16,
                 cursor: "pointer",
                 textAlign: "left",
+                appearance: "none",
+                WebkitAppearance: "none",
+                color: "inherit",
+                font: "inherit",
+                outline: "none",
               }}
             >
               <div style={{ minWidth: 110, fontSize: 13, color: "#94a3b8" }}>
