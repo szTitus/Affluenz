@@ -217,21 +217,6 @@ export default function HomePage() {
   return (
     <main style={{ maxWidth: 600, margin: "0 auto", padding: "48px 20px 80px" }}>
 
-      {/* VERSION MARKER - TEST DEPLOY */}
-      <div style={{
-        background: "linear-gradient(90deg, #ec4899, #8b5cf6)",
-        color: "white",
-        padding: "12px 20px",
-        borderRadius: 12,
-        marginBottom: 24,
-        fontSize: 13,
-        fontWeight: 700,
-        textAlign: "center",
-        letterSpacing: "0.05em",
-      }}>
-        🚀 BUILD v2 · {new Date().toISOString().slice(0, 16)}
-      </div>
-
       {/* Header */}
       <div style={{ marginBottom: 32 }}>
         <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 99, padding: "5px 12px 5px 10px", marginBottom: 16 }}>
