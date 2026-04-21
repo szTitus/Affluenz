@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.services.booking import fetch_booking_data
+from app.services.weather import cache_info as weather_cache_info
 from app.services.weather import fetch_weather_raw, fetch_weather_scores
 from app.db.session import get_db
 from app.models.affluence import AffluenceScore, Event
@@ -86,10 +87,13 @@ def debug_events_raw():
 
 
 @router.get("/debug/weather")
-def debug_weather():
-    """Données brutes Open-Meteo + scores météo calculés par jour."""
+def debug_weather(force: bool = False):
+    """Données brutes Open-Meteo + scores météo calculés par jour.
+
+    Query param ?force=1 pour ignorer le cache 24h.
+    """
     try:
-        raw = fetch_weather_raw()
+        raw = fetch_weather_raw(force_refresh=force)
         scores = fetch_weather_scores()
         daily = raw.get("daily", {})
         dates = daily.get("time", [])
@@ -104,7 +108,11 @@ def debug_weather():
                 "precipitation_mm": daily.get("precipitation_sum", [None])[i] if i < len(daily.get("precipitation_sum", [])) else None,
                 "computed_score": scores.get(d),
             })
-        return {"source": "open-meteo", "days": per_day}
+        return {
+            "source": "open-meteo",
+            "cache": weather_cache_info(),
+            "days": per_day,
+        }
     except Exception as exc:
         return {"error": str(exc)}
 

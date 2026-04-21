@@ -6,11 +6,17 @@ Docs : https://open-meteo.com/en/docs
 WMO weather codes : https://open-meteo.com/en/docs#api_form
 """
 
+import time
+
 import httpx
 
 OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
 LAT = 43.4527
 LON = 4.4282
+
+# Cache 24h (identique à Booking) – évite de spammer l'API à chaque refresh horaire
+_CACHE_TTL = 86400  # 24h en secondes
+_cache: dict[str, tuple[dict, float]] = {}
 
 # WMO weather code → score de base (0-100)
 _WMO_SCORE: dict[int, float] = {
@@ -49,10 +55,17 @@ def _code_score(code: int) -> float:
     return _WMO_SCORE.get(code, 50.0)
 
 
-def fetch_weather_raw() -> dict:
+def fetch_weather_raw(force_refresh: bool = False) -> dict:
     """
-    Retourne la réponse brute d'Open-Meteo (pour debug).
+    Retourne la réponse brute d'Open-Meteo, mise en cache 24h.
+    Avec force_refresh=True, ignore le cache.
     """
+    cache_key = "forecast_7d"
+    if not force_refresh and cache_key in _cache:
+        cached_data, cached_ts = _cache[cache_key]
+        if (time.time() - cached_ts) < _CACHE_TTL:
+            return cached_data
+
     params = {
         "latitude": LAT,
         "longitude": LON,
@@ -64,7 +77,22 @@ def fetch_weather_raw() -> dict:
     with httpx.Client(timeout=10) as client:
         resp = client.get(OPEN_METEO_URL, params=params)
         resp.raise_for_status()
-    return resp.json()
+    data = resp.json()
+    _cache[cache_key] = (data, time.time())
+    return data
+
+
+def cache_info() -> dict:
+    """Diagnostic du cache météo."""
+    if "forecast_7d" not in _cache:
+        return {"cached": False, "age_seconds": None, "ttl_seconds": _CACHE_TTL}
+    _, ts = _cache["forecast_7d"]
+    return {
+        "cached": True,
+        "age_seconds": round(time.time() - ts, 1),
+        "ttl_seconds": _CACHE_TTL,
+        "remaining_seconds": round(_CACHE_TTL - (time.time() - ts), 1),
+    }
 
 
 def fetch_weather_scores() -> dict[str, float]:
