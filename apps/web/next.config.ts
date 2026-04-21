@@ -13,10 +13,13 @@ const securityHeaders = [
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline'",
-      "style-src 'self' 'unsafe-inline'",
-      "connect-src 'self' https://affluenz-production.up.railway.app https://app.affluence13460.fr",
-      "img-src 'self' data:",
+      // GTM + Google Analytics
+      "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "font-src 'self' https://fonts.gstatic.com",
+      "connect-src 'self' https://affluenz-production.up.railway.app https://app.affluence13460.fr https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com",
+      "img-src 'self' data: https://www.googletagmanager.com https://www.google-analytics.com https://*.google-analytics.com",
+      "frame-src https://www.googletagmanager.com",
       "frame-ancestors 'none'",
     ].join("; "),
   },
