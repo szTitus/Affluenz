@@ -50,7 +50,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins.split(","),
     allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type"],
+    allow_headers=["Content-Type", "X-Refresh-Secret", "X-Stats-Secret"],
 )
 
 app.include_router(router, prefix="/api/v1")
