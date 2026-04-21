@@ -56,7 +56,8 @@ def compute_global_score(avail: float, price: float, event: float,
     # --- Modificateurs (chacun entre -10 et +10 environ) ---
 
     # Météo : beau temps = plus de monde, mauvais = moins
-    weather_mod = (weather - 50) / 5  # 0→-10, 50→0, 100→+10
+    # Poids renforcé : la météo est LE déclencheur d'une journée plage
+    weather_mod = (weather - 50) / 3.3  # 0→-15, 50→0, 100→+15
 
     # Prix : prix élevés = forte demande
     price_mod = (price - 50) / 10  # 0→-5, 50→0, 100→+5

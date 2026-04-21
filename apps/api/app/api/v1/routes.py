@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.services.booking import fetch_booking_data
+from app.services.weather import fetch_weather_raw, fetch_weather_scores
 from app.db.session import get_db
 from app.models.affluence import AffluenceScore, Event
 from app.schemas.affluence import AffluenceOut, EventIn, EventOut
@@ -82,6 +83,30 @@ def debug_events_raw():
         }
     except Exception as exc:
         return {"error": str(exc), "key_preview": key[:8] + "..." if key else "EMPTY"}
+
+
+@router.get("/debug/weather")
+def debug_weather():
+    """Données brutes Open-Meteo + scores météo calculés par jour."""
+    try:
+        raw = fetch_weather_raw()
+        scores = fetch_weather_scores()
+        daily = raw.get("daily", {})
+        dates = daily.get("time", [])
+        per_day = []
+        for i, d in enumerate(dates):
+            per_day.append({
+                "date": d,
+                "weathercode": daily.get("weathercode", [None])[i] if i < len(daily.get("weathercode", [])) else None,
+                "tmax": daily.get("temperature_2m_max", [None])[i] if i < len(daily.get("temperature_2m_max", [])) else None,
+                "tmin": daily.get("temperature_2m_min", [None])[i] if i < len(daily.get("temperature_2m_min", [])) else None,
+                "wind_max_kmh": daily.get("windspeed_10m_max", [None])[i] if i < len(daily.get("windspeed_10m_max", [])) else None,
+                "precipitation_mm": daily.get("precipitation_sum", [None])[i] if i < len(daily.get("precipitation_sum", [])) else None,
+                "computed_score": scores.get(d),
+            })
+        return {"source": "open-meteo", "days": per_day}
+    except Exception as exc:
+        return {"error": str(exc)}
 
 
 @router.get("/debug/booking")
